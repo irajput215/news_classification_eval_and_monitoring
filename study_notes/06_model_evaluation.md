@@ -242,6 +242,105 @@ This is NOT a simple question. Do NOT say "retrain whenever drift occurs."
 5. Retrain with new data
 ```
 
+Excellent question — this is exactly the gap that trips people up in interviews. Here's the honest answer:
+
+---
+
+## You Can't Measure Accuracy Without Labels
+
+Accuracy requires knowing the **ground truth**. If you never have labels for new production data, you **cannot directly measure** accuracy drop. This is the core tension.
+
+So production ML systems use a combination of **three strategies**:
+
+---
+
+## Strategy 1: Delayed Labels (Most Common)
+
+In many real systems, **labels arrive eventually** — just with a delay.
+
+```
+User uploads news article → Model predicts "Sports"
+                              ↓
+         24 hours later: editors manually categorize it → "World"
+                              ↓
+         Compare: prediction vs delayed label → accuracy on recent data
+```
+
+**Examples:**
+- Fraud detection: label = did the transaction turn out to be fraud? (confirmed in days/weeks)
+- Loan default: label = did the user default? (confirmed in months)
+- News classification: label = how did an editor actually categorize it?
+
+**Approach:** Maintain a rolling window of labeled recent data (e.g., last 7 days of confirmed labels). Compute accuracy on this window. If it drops below threshold → trigger retraining.
+
+---
+
+## Strategy 2: Proxy Metrics (When Labels Don't Exist)
+
+When you'll **never get labels**, you monitor signals that **correlate with** accuracy:
+
+| Proxy Metric | What it detects | Limitation |
+|---|---|---|
+| Prediction distribution shift | Model suddenly predicts "Sports" 80% vs historical 25% | Doesn't tell you if the predictions are wrong |
+| Confidence score distribution | Model confidence drops from avg 0.91 → 0.73 | Low confidence ≠ always wrong |
+| Model input drift (PSI) | Input features changed significantly | Doesn't directly mean accuracy dropped |
+| Business KPIs | Click-through rate drops on classified articles | Confounded by non-model factors |
+
+**The honest limitation:** proxy metrics are *signals*, not proof. A model can have drifted inputs but still be correct. Or stable inputs but still be wrong.
+
+---
+
+## Strategy 3: Active Sampling / Human Spot Checks
+
+Even without full labels, you can **sample a small percentage** of predictions and have humans verify them:
+
+```
+1,000 predictions/day
+     ↓
+Sample 50 (5%) randomly
+     ↓
+Human verifier checks: was the prediction correct?
+     ↓
+Estimated accuracy on recent data = correct / 50
+     ↓
+If this drops from 0.92 → 0.85 over 3 weeks → retrain
+```
+
+This is what companies like Google and LinkedIn do in production. They pay annotators to label a small ongoing sample.
+
+---
+
+## The Revised Decision Framework (Honest Version)
+
+```
+1. Detect: Is there input data drift? (PSI on features)
+   ↓ YES
+2. Is the drifted feature important? (feature importance check)
+   ↓ YES — raise alert
+3. Check proxy signal: Has prediction distribution shifted?
+   ↓ YES — raise alert
+4. Check actual performance:
+     a. Do you have delayed labels? → compute accuracy on last N days
+     b. No labels? → active sample: label 50-100 samples manually
+     c. No budget for labeling? → use confidence score degradation as proxy
+   ↓ If performance drop is confirmed and exceeds threshold
+5. Retrain
+```
+
+---
+
+## Key Interview Insight
+
+If an interviewer asks "how do you know performance degraded without retraining?" — the correct answer is:
+
+> "In production you need a **labeling strategy**. Either delayed labels that naturally arrive, active sampling where you pay for spot labels, or business KPIs as a proxy. Drift detection alone only tells you the input distribution changed — it doesn't tell you the model is wrong. Monitoring without any path to ground truth is incomplete."
+
+The production reality is:
+- **Small teams:** confidence score degradation + quarterly human spot check
+- **Mature teams:** delayed labels + automated accuracy tracking
+- **Large teams:** dedicated labeling pipelines with ongoing sampled annotation
+
+
 ### What to monitor before deciding:
 - **Data quality metrics**: null rate, schema compliance (always monitor)
 - **Input feature distributions**: PSI, KS test on text features (monitor regularly)
