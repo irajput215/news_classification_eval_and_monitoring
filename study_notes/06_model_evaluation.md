@@ -355,6 +355,93 @@ The production reality is:
 - New data class added to the problem space
 - Business rule change (e.g., new news category "AI" added)
 
+
+## PSI — Population Stability Index
+
+PSI is a number that measures **how much a feature's distribution has shifted** between two datasets (usually training data vs. recent production data).
+
+---
+
+### The Simple Idea
+
+At training time, your news articles had this word-count distribution:
+```
+Training data (reference):
+  short articles (< 50 words):   20%
+  medium articles (50-200 words): 60%
+  long articles (> 200 words):   20%
+```
+
+6 months later, production data looks like:
+```
+Production data (current):
+  short articles:   50%   ← jumped massively
+  medium articles:  40%   ← dropped
+  long articles:    10%   ← dropped
+```
+
+PSI quantifies how different these two distributions are.
+
+---
+
+### The Formula
+
+```
+PSI = Σ (current% - reference%) × ln(current% / reference%)
+```
+
+For each bucket:
+```
+Short:  (0.50 - 0.20) × ln(0.50/0.20) = 0.30 × ln(2.5) = 0.30 × 0.916 = 0.275
+Medium: (0.40 - 0.60) × ln(0.40/0.60) = -0.20 × ln(0.67) = -0.20 × -0.405 = 0.081
+Long:   (0.10 - 0.20) × ln(0.10/0.20) = -0.10 × ln(0.5) = -0.10 × -0.693 = 0.069
+
+PSI = 0.275 + 0.081 + 0.069 = 0.425
+```
+
+---
+
+### The Thresholds (Industry Standard)
+
+| PSI | Meaning | Action |
+|-----|---------|--------|
+| < 0.1 | No significant change | Monitor normally |
+| 0.1 – 0.2 | Moderate shift | Investigate, watch closely |
+| > 0.2 | Significant shift | Likely model retraining needed |
+
+---
+
+### Why PSI and Not Just "Compare Averages"?
+
+Comparing only the mean misses distribution shape changes. Example:
+
+```
+Training: most articles are medium (bell curve centered at 100 words)
+Production: mix of very short AND very long articles (bimodal)
+
+Mean of both = 100 words  ← averages look identical
+PSI = 0.35                ← distribution is completely different
+```
+
+PSI catches shape changes that averages hide.
+
+---
+
+### In This Project
+
+[`monitoring/monitor.py`](file:///Users/irajput/Desktop/mlops-project/mlops-pipeline/monitoring/monitor.py) extracts 6 numeric features from text and computes PSI on each:
+
+```python
+features = ["text_length", "word_count", "avg_word_length",
+            "num_sentences", "uppercase_ratio", "digit_ratio"]
+
+for feature in features:
+    psi = compute_psi(reference[feature], current[feature], bins=10)
+    if psi > 0.15:   # this project uses 0.15, not the standard 0.2
+        print(f"DRIFT ALERT: {feature} PSI={psi:.3f}")
+```
+
+PSI is applied to these proxy features **instead of raw text** because you can't compute a histogram of strings — you need numbers.
 ---
 
 ## 9. Production Perspective
