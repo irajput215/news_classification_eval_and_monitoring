@@ -567,6 +567,4 @@ MIT — see [LICENSE](LICENSE) for details.
 
 <div align="center">
 
-Built by [MOHD-OMER](https://github.com/MOHD-OMER) · [GitHub](https://github.com/MOHD-OMER/mlops-pipeline) · [DockerHub](https://hub.docker.com/r/omer022/mlops-news-classifier)
-
 </div>
